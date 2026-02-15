@@ -33,6 +33,10 @@ BOOTSTRAP_FAILED=0
 
 now_ts() { date '+%Y-%m-%d %H:%M:%S'; }
 
+screen_msg() {
+  printf '==> %s\n' "$1"
+}
+
 escape_md() {
   local value="$1"
   value="${value//$'\n'/ }"
@@ -111,20 +115,25 @@ ensure_not_root() {
 }
 
 install_clt_if_missing() {
+  screen_msg 'Checking Apple Command Line Tools...'
   if xcode-select -p >/dev/null 2>&1; then
+    screen_msg 'Command Line Tools already installed.'
     task_row 'Install Command Line Tools' 'SKIPPED' 'Already installed.'
     return
   fi
 
   if ! xcode-select --install >/dev/null 2>&1; then
+    screen_msg 'Could not launch Command Line Tools installer.'
     task_row 'Install Command Line Tools' 'FAILED' 'Could not launch installer.'
     BOOTSTRAP_FAILED=1
     return
   fi
 
   until xcode-select -p >/dev/null 2>&1; do
+    screen_msg 'Waiting for Command Line Tools installation to finish...'
     sleep 10
   done
+  screen_msg 'Command Line Tools installation complete.'
   task_row 'Install Command Line Tools' 'SUCCESS' 'Installed.'
 }
 
@@ -137,18 +146,23 @@ init_brew_env() {
 }
 
 install_homebrew_if_missing() {
+  screen_msg 'Checking Homebrew...'
   init_brew_env
   if command -v brew >/dev/null 2>&1; then
+    screen_msg 'Homebrew already installed.'
     task_row 'Install Homebrew' 'SKIPPED' 'Already installed.'
     return
   fi
 
+  screen_msg 'Installing Homebrew...'
   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || true
   init_brew_env
 
   if command -v brew >/dev/null 2>&1; then
+    screen_msg 'Homebrew installation complete.'
     task_row 'Install Homebrew' 'SUCCESS' 'Installed.'
   else
+    screen_msg 'Homebrew install failed.'
     task_row 'Install Homebrew' 'FAILED' 'brew unavailable after install attempt.'
     BOOTSTRAP_FAILED=1
   fi
@@ -184,9 +198,12 @@ update_macos_if_available() {
 run_task() {
   local name="$1"
   shift
+  screen_msg "$name..."
   if "$@"; then
+    screen_msg "$name complete."
     task_row "$name" 'SUCCESS' 'Completed.'
   else
+    screen_msg "$name failed."
     task_row "$name" 'FAILED' 'Command failed.'
     BOOTSTRAP_FAILED=1
   fi
@@ -194,7 +211,9 @@ run_task() {
 
 install_formulae() {
   local formula
+  screen_msg 'Installing Homebrew formulae...'
   for formula in "${FORMULAE[@]}"; do
+    screen_msg "Formula: $formula"
     if brew list --formula "$formula" >/dev/null 2>&1; then
       item_row 'brew' "$formula" 'yes' 'yes' 'ALREADY_INSTALLED' 'Formula already present.'
       continue
@@ -211,7 +230,9 @@ install_formulae() {
 
 install_casks() {
   local cask
+  screen_msg 'Installing Homebrew casks...'
   for cask in "${CASKS[@]}"; do
+    screen_msg "Cask: $cask"
     if brew list --cask "$cask" >/dev/null 2>&1; then
       item_row 'cask' "$cask" 'yes' 'yes' 'ALREADY_INSTALLED' 'Cask already present.'
       continue
@@ -328,10 +349,17 @@ print_handoff() {
 }
 
 main() {
+  printf '\nWelcome to the macOS Stage 1 bootstrap.\n'
+  printf 'This script checks system prerequisites, installs core tools, configures shell basics, and records a status report.\n\n'
+  printf 'Estimated time: 10-30 minutes depending on updates and installs.\n'
+  printf 'Note: some steps may ask for your macOS password (sudo).\n\n'
+
   write_status_header
+  screen_msg "Writing status report to $STATUS_PATH"
   require_macos
   ensure_not_root
   install_clt_if_missing
+  screen_msg 'Checking for macOS updates...'
   update_macos_if_available
   install_homebrew_if_missing
 
